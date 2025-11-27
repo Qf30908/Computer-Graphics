@@ -171,14 +171,14 @@ controls.enabled = true;
 document.addEventListener('keydown', e => {
     if(e.code==='KeyW') moveForward=true;
     if(e.code==='KeyS') moveBackward=true;
-    if(e.code==='KeyA') moveLeft=true;
-    if(e.code==='KeyD') moveRight=true;
+    if(e.code==='KeyD') moveLeft=true;
+    if(e.code==='KeyA') moveRight=true;
 });
 document.addEventListener('keyup', e => {
     if(e.code==='KeyW') moveForward=false;
     if(e.code==='KeyS') moveBackward=false;
-    if(e.code==='KeyA') moveLeft=false;
-    if(e.code==='KeyD') moveRight=false;
+    if(e.code==='KeyD') moveLeft=false;
+    if(e.code==='KeyA') moveRight=false;
 });
 
 // === Info Panel ===

@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FBX Animation Example</title>
+    <style>
+        body { margin: 0; padding: 0; overflow: hidden; background: #000; }
+        canvas { display: block; }
+        #info {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            color: white;
+            font-family: Arial, sans-serif;
+            font-size: 14px;
+            background: rgba(0,0,0,0.5);
+            padding: 10px;
+            border-radius: 5px;
+            max-width: 300px;
+        }
+        #controls {
+            position: absolute;
+            top: 160px;
+            left: 10px;
+            color: white;
+            font-family: Arial, sans-serif;
+            font-size: 12px;
+            background: rgba(0,0,0,0.5);
+            padding: 10px;
+            border-radius: 5px;
+        }
+        button {
+            margin: 5px;
+            padding: 5px 10px;
+            background: #333;
+            color: white;
+            border: none;
+            border-radius: 3px;
+            cursor: pointer;
+        }
+        button:hover {
+            background: #555;
+        }
+        #loading {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: white;
+            font-family: Arial, sans-serif;
+            font-size: 18px;
+            text-align: center;
+        }
+        .hidden { display: none; }
+    </style>
+</head>
+<body>
+    <div id="loading">
+        Loading FBX Model...<br>
+        <div style="font-size: 12px; margin-top: 10px;">Please wait while the model loads</div>
+    </div>
+    <div id="controls" class="hidden">
+        <div>Animation Controls:</div>
+        <button onclick="playAnimation('idle')">Idle</button>
+        <button onclick="playAnimation('walk')">Walk</button>
+        <button onclick="playAnimation('run')">Run</button>
+        <button onclick="playAnimation('jump')">Jump</button>
+        <br>
+        <button onclick="pauseAnimation()">Pause/Resume</button>
+        <button onclick="resetAnimation()">Reset</button>
+    </div>
+    <script type="module" src="main.js"></script>
+</body>
+</html>

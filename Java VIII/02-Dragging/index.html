@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Dragging Example</title>
+    <style>
+      body { margin: 0; overflow: hidden; background: #000; }
+      #info {
+        position: absolute;
+        top: 10px;
+        left: 10px;
+        color: white;
+        font-family: Arial, sans-serif;
+        font-size: 14px;
+        z-index: 100;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="info">
+      Drag the green cube and blue sphere. Red cylinder and yellow cone are not draggable.
+    </div>
+    <script type="module" src="/main.js"></script>
+  </body>
+</html>

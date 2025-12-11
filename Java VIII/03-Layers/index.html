@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Layers Example</title>
+    <style>
+      body { margin: 0; overflow: hidden; background: #000; }
+      #info {
+        position: absolute;
+        top: 10px;
+        left: 10px;
+        color: white;
+        font-family: Arial, sans-serif;
+        font-size: 14px;
+        z-index: 100;
+        background: rgba(0,0,0,0.5);
+        padding: 10px;
+        border-radius: 5px;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="info">
+      <strong>Modes example</strong><br>
+      - S key for SELECT Mode<br>
+      - Red objects: Decorative layer (visual only)<br>
+      - Use GUI to toggle layer visibility<br>
+      - Click blue objects to interact
+    </div>
+    <script type="module" src="/main.js"></script>
+  </body>
+</html>

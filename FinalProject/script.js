@@ -1,22 +1,50 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { PointerLockControls } from 'three/examples/jsm/controls/PointerLockControls.js';
+import TWEEN from '@tweenjs/tween.js';
 
+// === Global variables ===
 let scene, camera, renderer, controls, hero;
 let moveForward = false, moveBackward = false, moveLeft = false, moveRight = false;
 const speed = 0.1;
 
-// === Day-Night Cycle ===
-let time = 0; // 0..1
-const daySpeed = 0.001; // controls speed of day-night
-const lampLights = []; // store streetlamp lights
+// === Raycasting ===
+const raycaster = new THREE.Raycaster();
+const mouse = new THREE.Vector2();
+
+// === Door system ===
+let door, doorPivot;
+let doorOpen = false;
+let doorTriggerArea;
+
+// Day-Night
+let time = 0;
+const daySpeed = 0.001;
+const lampLights = [];
+const lampHeads = [];
+let lampsEnabled = true;
+let sunEnabled = true;
+let autoTime = true;
+
+// Toggleables
+let fogEnabled = true;
+let birdsEnabled = true;
+let waterEnabled = true;
+let audioEnabled = true;
+
+// Birds array
+const birds = [];
+
+// Texture loader instance
+const textureLoader = new THREE.TextureLoader();
 
 // === Scene ===
 scene = new THREE.Scene();
-scene.background = new THREE.Color(0x87ceeb); // day sky
+scene.background = new THREE.Color(0x87ceeb);
+scene.fog = new THREE.Fog(0x87ceeb, 10, 50);
 
 // === Camera ===
-camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 100);
+camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 100);
 camera.position.set(0, 1.7, 5);
 
 // === Renderer ===
@@ -25,9 +53,6 @@ renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 document.body.appendChild(renderer.domElement);
-
-
-
 
 // === Lighting ===
 const ambient = new THREE.AmbientLight(0xffffff, 0.5);
@@ -46,8 +71,16 @@ sun.shadow.camera.top = 20;
 sun.shadow.camera.bottom = -20;
 scene.add(sun);
 
+// Rim light for bust
+const rimLight = new THREE.SpotLight(0xffffff, 0.5);
+rimLight.position.set(6, 5, 6);
+rimLight.angle = Math.PI / 6;
+rimLight.penumbra = 0.5;
+rimLight.castShadow = true;
+scene.add(rimLight);
+
 // === Ground ===
-const groundTexture = new THREE.TextureLoader().load('/assets/ground_texture.jpg');
+const groundTexture = textureLoader.load('/assets/ground_texture.jpg');
 groundTexture.wrapS = groundTexture.wrapT = THREE.RepeatWrapping;
 groundTexture.repeat.set(5, 5);
 
@@ -64,14 +97,12 @@ const loader = new GLTFLoader();
 loader.load('/assets/bust_of_scanderbeg_parco_del_dono_parma.glb', (gltf) => {
     hero = gltf.scene;
     hero.traverse(c => {
-    if(c.isMesh && c.material.emissive){
-        c.material.emissiveIntensity = dayFactor * 0.3; // scaled by day-night factor
-    }
+        if (c.isMesh) {
+            c.userData.isBust = true;   // 🔑 THIS enables click detection
+            if (c.material.emissive) c.material.emissiveIntensity = 0.3;
+        }
     });
-
     const box = new THREE.Box3().setFromObject(hero);
-
-    // Scale & position
     hero.scale.set(2, 2, 2);
     hero.position.set(6.45, 2, 6);
     hero.rotation.set(
@@ -79,26 +110,18 @@ loader.load('/assets/bust_of_scanderbeg_parco_del_dono_parma.glb', (gltf) => {
         THREE.MathUtils.degToRad(-0.5),
         THREE.MathUtils.degToRad(0.8)
     );
-
-    // Adjust Y to ground
     const minY = box.min.y;
     hero.position.y = -minY * hero.scale.y - 0.5;
-
     scene.add(hero);
 
-    // Optional base under bust
-    // Load texture
-    const baseTexture = new THREE.TextureLoader().load('/assets/base_texture.jpg'); // vendos path të duhur
+    // Base under bust
+    const baseTexture = textureLoader.load('/assets/base_texture.jpg');
     baseTexture.wrapS = baseTexture.wrapT = THREE.RepeatWrapping;
-    baseTexture.repeat.set(2, 2); // përsëritje e teksturës në sipërfaqe
+    baseTexture.repeat.set(2, 2);
 
     const base = new THREE.Mesh(
         new THREE.BoxGeometry(8, 0.2, 9),
-        new THREE.MeshStandardMaterial({ 
-          map: baseTexture,      // tekstura kryesore
-          roughness: 0.8,        // sa mat duket sipërfaqja
-          metalness: 0.2         // pak metalik për efekt realistik
-        })
+        new THREE.MeshStandardMaterial({ map: baseTexture, roughness: 0.8, metalness: 0.2 })
     );
     base.position.set(0, 0, -0.5);
     base.castShadow = true;
@@ -112,33 +135,82 @@ loader.load('/assets/bust_of_scanderbeg_parco_del_dono_parma.glb', (gltf) => {
     createStreetLamp(-3, -3);
 });
 
-// === Buildings at corners ===
-function createBuilding(x, z, width = 2, height = 5, depth = 2, color = 0x8888ff){
-    const buildingTexture = new THREE.TextureLoader().load('/assets/buildingtexture.jpg'); // vendos path të duhur
+// === Buildings ===
+function createBuilding(x, z, width = 2, height = 5, depth = 2) {
+    const buildingTexture = textureLoader.load('/assets/buildingtexture.jpg');
     buildingTexture.wrapS = buildingTexture.wrapT = THREE.RepeatWrapping;
-    // buildingTexture.repeat.set(2, 2); // përsëritje e teksturës në sipërfaqe
-    
-    const geometry = new THREE.BoxGeometry(width, height, depth);
-    const material = new THREE.MeshStandardMaterial({ 
-        map: buildingTexture,      // tekstura kryesore
-        roughness: 0.8,        // sa mat duket sipërfaqja
-        metalness: 0.2         // pak metalik për efekt realistik
-     });
-    const building = new THREE.Mesh(geometry, material);
+    const building = new THREE.Mesh(
+        new THREE.BoxGeometry(width, height, depth),
+        new THREE.MeshStandardMaterial({ map: buildingTexture, roughness: 0.8, metalness: 0.2 })
+    );
     building.castShadow = true;
     building.receiveShadow = true;
-    building.position.set(x, height/2, z);
+    building.position.set(x, height / 2, z);
     scene.add(building);
 }
-
-// Place buildings
 createBuilding(14, 14);
 createBuilding(-14, 14);
 createBuilding(-14, -14);
 createBuilding(14, -14);
 
+
+
+function createDoor() {
+    const doorX = 0;
+    const doorZ = 15;
+    const doorWidth = 3;
+    const doorHeight = 3.5;
+    const doorThickness = 0.2;
+    
+    console.log('=== CREATING DOOR - SUPER SIMPLE ===');
+    
+    // 1. Create door WITHOUT ANY PIVOT - JUST A SIMPLE MESH
+    const doorTexture = textureLoader.load('/assets/door_texture.jpg');
+    doorTexture.wrapS = THREE.RepeatWrapping;
+    doorTexture.wrapT = THREE.RepeatWrapping;
+    doorTexture.repeat.set(1, 1);
+    
+    const doorMaterial = new THREE.MeshStandardMaterial({ 
+        map: doorTexture,
+        roughness: 0.7,
+        metalness: 0.1
+    });
+    
+    const doorGeometry = new THREE.BoxGeometry(doorWidth, doorHeight, doorThickness);
+    
+    // Create the door
+    door = new THREE.Mesh(doorGeometry, doorMaterial);
+    
+    // Position it
+    door.position.set(doorX, doorHeight/2, doorZ);
+    door.rotation.y = 0; // Start closed
+    
+    door.castShadow = true;
+    door.receiveShadow = true;
+    door.userData.isDoor = true;
+    
+    // Add door knob
+    const doorKnobGeometry = new THREE.SphereGeometry(0.08, 8, 8);
+    const doorKnobMaterial = new THREE.MeshStandardMaterial({ color: 0xaaaaaa, metalness: 0.8 });
+    const doorKnob = new THREE.Mesh(doorKnobGeometry, doorKnobMaterial);
+    doorKnob.position.set(doorWidth/2 - 0.1, 0, doorThickness/2 + 0.05);
+    door.add(doorKnob);
+    
+    // Add to scene
+    scene.add(door);
+    
+    console.log('Simple door created at:', door.position);
+    
+    // Don't create trigger area for now - let's just get rotation working
+    doorTriggerArea = null;
+    
+    return door;
+}
+// Create the door
+createDoor();
+
 // === Street Lamp ===
-function createStreetLamp(x, z){
+function createStreetLamp(x, z) {
     const pole = new THREE.Mesh(
         new THREE.CylinderGeometry(0.05, 0.05, 3, 16),
         new THREE.MeshStandardMaterial({ color: 0x444444, metalness: 0.8, roughness: 0.3 })
@@ -152,8 +224,9 @@ function createStreetLamp(x, z){
     );
     lampHead.position.y = 1.5;
     pole.add(lampHead);
+    lampHeads.push(lampHead);
 
-    const light = new THREE.PointLight(0xffee88, 1.2, 10);
+    const light = new THREE.PointLight(0xffee88, 0, 10);
     light.position.set(0, 1.5, 0);
     light.castShadow = true;
     lampHead.add(light);
@@ -164,55 +237,57 @@ function createStreetLamp(x, z){
 
 // === FPS Controls ===
 controls = new PointerLockControls(camera, document.body);
-document.body.addEventListener('click', ()=> controls.lock());
+document.body.addEventListener('click', () => {
+    if (document.pointerLockElement !== document.body) {
+        controls.lock();
+    }
+});
 controls.enabled = true;
 
-// === Keyboard movement ===
+// === Keyboard ===
 document.addEventListener('keydown', e => {
-    if(e.code==='KeyW') moveForward=true;
-    if(e.code==='KeyS') moveBackward=true;
-    if(e.code==='KeyD') moveLeft=true;
-    if(e.code==='KeyA') moveRight=true;
+    if (e.code === 'KeyW') moveForward = true;
+    if (e.code === 'KeyS') moveBackward = true;
+    if (e.code === 'KeyD') moveLeft = true;
+    if (e.code === 'KeyA') moveRight = true;
+    if (e.code === 'KeyL') {
+        lampsEnabled = !lampsEnabled;
+        console.log('Lamps enabled:', lampsEnabled);
+    }
+    if (e.code === 'KeyP') {
+        sunEnabled = !sunEnabled;
+        console.log('Sun enabled:', sunEnabled);
+    }
 });
 document.addEventListener('keyup', e => {
-    if(e.code==='KeyW') moveForward=false;
-    if(e.code==='KeyS') moveBackward=false;
-    if(e.code==='KeyD') moveLeft=false;
-    if(e.code==='KeyA') moveRight=false;
+    if (e.code === 'KeyW') moveForward = false;
+    if (e.code === 'KeyS') moveBackward = false;
+    if (e.code === 'KeyD') moveLeft = false;
+    if (e.code === 'KeyA') moveRight = false;
 });
 
 // === Info Panel ===
 const infoPanel = document.getElementById('infoPanel');
-if(infoPanel) infoPanel.style.display = 'none';
-renderer.domElement.addEventListener('click', ()=>{
-    if(!hero || !infoPanel) return;
-    const raycaster = new THREE.Raycaster();
-    const mouse = new THREE.Vector2(0,0);
-    raycaster.setFromCamera(mouse, camera);
-    const intersects = raycaster.intersectObject(hero,true);
-    if(intersects.length>0) infoPanel.style.display = infoPanel.style.display==='none'?'block':'none';
-});
+infoPanel.style.position = 'absolute';
+infoPanel.style.bottom = '10px';
+infoPanel.style.left = '10px';
+infoPanel.style.background = 'rgba(0,0,0,0.6)';
+infoPanel.style.color = 'white';
+infoPanel.style.padding = '8px';
+infoPanel.style.fontFamily = 'Arial';
+infoPanel.style.display = 'none';
 
-
+// === Wall & Bench ===
 function createWallSegment(x1, z1, x2, z2) {
     const length = Math.sqrt((x2 - x1) ** 2 + (z2 - z1) ** 2);
     const wallHeight = 1.8;
-
-    const wallTexture = new THREE.TextureLoader().load('/assets/buildingtexture.jpg');
+    const wallTexture = textureLoader.load('/assets/buildingtexture.jpg');
     wallTexture.wrapS = wallTexture.wrapT = THREE.RepeatWrapping;
     wallTexture.repeat.set(length / 2, wallHeight / 1);
-
-    const wallMaterial = new THREE.MeshStandardMaterial({
-        map: wallTexture,
-        roughness: 0.9,
-        metalness: 0.1
-    });
-
     const wall = new THREE.Mesh(
         new THREE.BoxGeometry(length, wallHeight, 1),
-        wallMaterial
+        new THREE.MeshStandardMaterial({ map: wallTexture, roughness: 0.9, metalness: 0.1 })
     );
-
     wall.position.set((x1 + x2) / 2, wallHeight / 2, (z1 + z2) / 2);
     wall.rotation.y = Math.atan2(z2 - z1, x2 - x1);
     wall.castShadow = true;
@@ -220,160 +295,401 @@ function createWallSegment(x1, z1, x2, z2) {
     scene.add(wall);
 }
 
-
-createWallSegment(-15, 15, 15, 15);  // Front
-createWallSegment(-15, -15, 15, -15); // Back
-createWallSegment(-15, -15, -15, 15); // Left
-createWallSegment(15, -15, 15, 15);  
-
+// Create walls with gap for door (door is 2.5 units wide, so gap from -1.25 to 1.25)
+createWallSegment(-15, 15, -1.5, 15);
+createWallSegment(1.5, 15, 15, 15);
+createWallSegment(-15, -15, 15, -15);
+createWallSegment(-15, -15, -15, 15);
+createWallSegment(15, -15, 15, 15);
 
 function createBench(x, z, rotationY = 0) {
-    // Seat
-    const seatGeo = new THREE.BoxGeometry(2, 0.2, 0.6);
-    const seatMat = new THREE.MeshStandardMaterial({ color: 0x8B4513 });
-    const seat = new THREE.Mesh(seatGeo, seatMat);
+    const seat = new THREE.Mesh(new THREE.BoxGeometry(2, 0.2, 0.6), new THREE.MeshStandardMaterial({ color: 0x8B4513 }));
     seat.position.set(x, 0.6, z);
-
-    // Backrest
-    const backGeo = new THREE.BoxGeometry(2, 0.8, 0.1);
-    const backMat = new THREE.MeshStandardMaterial({ color: 0x654321 });
-    const back = new THREE.Mesh(backGeo, backMat);
+    const back = new THREE.Mesh(new THREE.BoxGeometry(2, 0.8, 0.1), new THREE.MeshStandardMaterial({ color: 0x654321 }));
     back.position.set(x, 1, z - 0.25);
-
-    // Legs
-    const legGeo = new THREE.BoxGeometry(0.1, 0.6, 0.1);
-    const legMat = new THREE.MeshStandardMaterial({ color: 0x3e2723 });
-    const leg1 = new THREE.Mesh(legGeo, legMat);
+    const leg1 = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.6, 0.1), new THREE.MeshStandardMaterial({ color: 0x3e2723 }));
     const leg2 = leg1.clone();
     leg1.position.set(x - 0.9, 0.3, z + 0.25);
     leg2.position.set(x + 0.9, 0.3, z + 0.25);
-
-    // Group bench parts
     const bench = new THREE.Group();
     bench.add(seat, back, leg1, leg2);
     bench.rotation.y = rotationY;
     scene.add(bench);
 }
-
-
-createBench(0, -14, 0); 
+createBench(0, -14, 0);
 createBench(-7, -14, 0);
-createBench(7, -14, 0);       // back wall
+createBench(7, -14, 0);
+createBench(0, -14, Math.PI / 2);
+createBench(7, -14, Math.PI / 2);
+createBench(-7, -14, Math.PI / 2);
+createBench(0, -14, -Math.PI / 2);
+createBench(7, -14, -Math.PI / 2);
+createBench(-7, -14, -Math.PI / 2);
 
-createBench(0, -14, Math.PI/2); // left wall
-createBench(7, -14, Math.PI/2); // left wall
-createBench(-7, -14, Math.PI/2); // left wall
-
-createBench(0, -14, -Math.PI/2); // right wall
-createBench(7, -14, -Math.PI/2); // right wall
-createBench(-7, -14, -Math.PI/2); // right wall
-
-// === Park Bridge Geometry & Material ===
+// === Park Bridges ===
 const parkBridgeGeometry = new THREE.BoxGeometry(12, 0.1, 2);
-const parkBridgeTexture = new THREE.TextureLoader().load('/assets/park_texture.jpg');
+const parkBridgeTexture = textureLoader.load('/assets/park_texture.jpg');
 parkBridgeTexture.wrapS = parkBridgeTexture.wrapT = THREE.RepeatWrapping;
 parkBridgeTexture.repeat.set(2, 1);
 const parkBridgeMaterial = new THREE.MeshStandardMaterial({ map: parkBridgeTexture });
-
-// Behind Bust
 const parkBridgeBack = new THREE.Mesh(parkBridgeGeometry, parkBridgeMaterial);
-parkBridgeBack.position.set(0 , 0.1 , -5);
+parkBridgeBack.position.set(0, 0.1, -5);
 scene.add(parkBridgeBack);
-// === Front Entrance Bridge Split ===
-const bridgeLength = 5; // shorter segments
-const bridgeWidth = 2;
-
-// Left segment
-const frontBridgeLeft = new THREE.Mesh(
-    new THREE.BoxGeometry(bridgeLength, 0.1, bridgeWidth),
-    parkBridgeMaterial
-);
-frontBridgeLeft.position.set(-3.5, 0.1, 5); // shift left
+const frontBridgeLeft = new THREE.Mesh(new THREE.BoxGeometry(5, 0.1, 2), parkBridgeMaterial);
+frontBridgeLeft.position.set(-3.5, 0.1, 5);
 scene.add(frontBridgeLeft);
-
-// Right segment
-const frontBridgeRight = new THREE.Mesh(
-    new THREE.BoxGeometry(bridgeLength, 0.1, bridgeWidth),
-    parkBridgeMaterial
-);
-frontBridgeRight.position.set(3.5, 0.1, 5); // shift right
+const frontBridgeRight = new THREE.Mesh(new THREE.BoxGeometry(5, 0.1, 2), parkBridgeMaterial);
+frontBridgeRight.position.set(3.5, 0.1, 5);
 scene.add(frontBridgeRight);
-
-
-// Left of Bust
 const parkBridgeLeft = new THREE.Mesh(parkBridgeGeometry, parkBridgeMaterial);
-parkBridgeLeft.rotation.y = Math.PI / 2; // rotate 90° to align along X-axis
+parkBridgeLeft.rotation.y = Math.PI / 2;
 parkBridgeLeft.position.set(-5, 0.1, 0);
 scene.add(parkBridgeLeft);
-
-// Right of Bust
 const parkBridgeRight = new THREE.Mesh(parkBridgeGeometry, parkBridgeMaterial);
-parkBridgeRight.rotation.y = Math.PI / 2; // rotate 90° to align along X-axis
+parkBridgeRight.rotation.y = Math.PI / 2;
 parkBridgeRight.position.set(5, 0.1, 0);
 scene.add(parkBridgeRight);
 
+// === Water under bridge ===
+const waterTexture = textureLoader.load('/assets/water_texture.jpg');
+waterTexture.wrapS = waterTexture.wrapT = THREE.RepeatWrapping;
+waterTexture.repeat.set(4, 2);
+const water = new THREE.Mesh(new THREE.PlaneGeometry(12, 5), new THREE.MeshStandardMaterial({ map: waterTexture, transparent: true, opacity: 0.7 }));
+water.rotation.x = -Math.PI / 2;
+water.position.set(0, 0.05, 5);
+scene.add(water);
 
-
-
-// === Animate Loop ===
-function animate(){
-    requestAnimationFrame(animate);
-
-    // ---- Day-Night Cycle ----
-    time += daySpeed;
-    if(time > 1) time = 0;
-
-    const dayFactor = Math.sin(time * Math.PI * 2) * 0.5 + 0.5;
-
-    // Background color transition
-    scene.background = new THREE.Color().lerpColors(
-        new THREE.Color(0x87ceeb), // day
-        new THREE.Color(0x0a0a2a), // night
-        1 - dayFactor
+// === Birds ===
+function createBird() {
+    const bird = new THREE.Mesh(
+        new THREE.ConeGeometry(0.2, 0.5, 3),
+        new THREE.MeshStandardMaterial({ color: 0x000000 })
     );
+    bird.rotation.x = Math.PI / 2;
+    bird.position.set(Math.random() * 20 - 10, Math.random() * 5 + 2, Math.random() * 20 - 10);
+    scene.add(bird);
+    birds.push(bird);
+}
+for (let i = 0; i < 7; i++) createBird();
 
-    // ---- Day-Night Cycle ----
-const sunThreshold = 0.3; // below this, it's night
+// === Controls Panel ===
+const controlPanel = document.createElement('div');
+controlPanel.style.position = 'absolute';
+controlPanel.style.top = '10px';
+controlPanel.style.right = '10px';
+controlPanel.style.backgroundColor = 'rgba(0,0,0,0.6)';
+controlPanel.style.color = '#fff';
+controlPanel.style.padding = '10px';
+controlPanel.style.fontFamily = 'Arial';
+controlPanel.style.borderRadius = '5px';
+controlPanel.style.zIndex = '1000';
+controlPanel.innerHTML = `
+<b>Controls:</b><br>
+W/A/S/D: Move<br>
+L: Toggle Lamps<br>
+P: Toggle Sun<br>
+Time: <input type="range" id="timeSlider" min="0" max="1" step="0.001" value="0"><br>
+<br>
+<b>Extras:</b><br>
+<input type="checkbox" id="fogToggle" checked> Fog<br>
+<input type="checkbox" id="birdsToggle" checked> Birds<br>
+<input type="checkbox" id="waterToggle" checked> Water<br>
+<input type="checkbox" id="audioToggle" checked> Ambient Audio<br>
+`;
+document.body.appendChild(controlPanel);
 
-// Adjust sun light
-sun.intensity = 0.2 + 0.8 * dayFactor;   // overall intensity
-sun.visible = dayFactor > sunThreshold;  // hide sun at night
-sun.castShadow = dayFactor > sunThreshold; // disable sun shadows at night
+// Extra toggles
+document.getElementById('fogToggle').addEventListener('change', e => fogEnabled = e.target.checked);
+document.getElementById('birdsToggle').addEventListener('change', e => {
+    birdsEnabled = e.target.checked;
+    if (!birdsEnabled) {
+        birds.forEach(bird => scene.remove(bird));
+        birds.length = 0;
+    } else {
+        for (let i = 0; i < 7; i++) createBird();
+    }
+});
+document.getElementById('waterToggle').addEventListener('change', e => waterEnabled = e.target.checked);
 
-// Lamps active at night
-lampLights.forEach(l => {
-    if(dayFactor > 0.7){ // day
-        l.intensity = 0;
-        l.visible = false; // hide lamp light at day
-    } else if(dayFactor < 0.3){ // night
-        l.intensity = 1.2;
-        l.visible = true;  // show lamp light at night
-        l.castShadow = true; // ensure lamps cast shadows
+// Audio toggle
+const audioToggle = document.getElementById('audioToggle');
+audioToggle.addEventListener('change', e => {
+    audioEnabled = e.target.checked;
+    if (sound) {
+        if (audioEnabled) {
+            sound.play();
+        } else {
+            sound.pause();
+        }
     }
 });
 
+// Time slider
+const timeSlider = document.getElementById('timeSlider');
+timeSlider.addEventListener('input', e => {
+    if (!autoTime) time = parseFloat(e.target.value);
+});
 
-    // ---- Movement ----
+// Time mode
+const timeModeButton = document.createElement('button');
+timeModeButton.style.position = 'absolute';
+timeModeButton.style.top = '240px';
+timeModeButton.style.right = '10px';
+timeModeButton.style.padding = '5px';
+timeModeButton.style.zIndex = '1000';
+timeModeButton.innerText = 'Time Mode: Auto';
+document.body.appendChild(timeModeButton);
+timeModeButton.addEventListener('click', () => {
+    autoTime = !autoTime;
+    timeModeButton.innerText = autoTime ? 'Time Mode: Auto' : 'Time Mode: Manual';
+});
+
+// === Audio ===
+let sound;
+const listener = new THREE.AudioListener();
+camera.add(listener);
+sound = new THREE.Audio(listener);
+const audioLoader = new THREE.AudioLoader();
+audioLoader.load('/assets/park_ambient.mp3', buffer => {
+    sound.setBuffer(buffer);
+    sound.setLoop(true);
+    sound.setVolume(0.2);
+    if (audioEnabled) {
+        sound.play();
+    }
+}, undefined, (error) => {
+    console.error('Error loading audio:', error);
+});
+
+// === Animate ===
+let bob = 0;
+function animate() {
+    requestAnimationFrame(animate);
+
+    // Day-Night
+    if (autoTime) { 
+        time += daySpeed; 
+        if (time > 1) time = 0; 
+        timeSlider.value = time; 
+    }
+    const dayFactor = Math.sin(time * Math.PI * 2) * 0.5 + 0.5;
+    const isDay = dayFactor > 0.5;
+    const isNight = dayFactor <= 0.5;
+
+    // Background & fog
+    scene.background.lerpColors(new THREE.Color(0x87ceeb), new THREE.Color(0x0a0a2a), 1 - dayFactor);
+    scene.fog.color.lerpColors(new THREE.Color(0x87ceeb), new THREE.Color(0x0a0a2a), 1 - dayFactor);
+    scene.fog.near = fogEnabled ? 10 : 1000;
+    scene.fog.far = fogEnabled ? 50 : 1000;
+
+    // Sun - only visible during day and when enabled
+    if (sunEnabled) {
+        sun.intensity = Math.max(0, 0.2 + 0.8 * dayFactor - 0.5);
+        sun.visible = isDay;
+        sun.castShadow = isDay;
+        sun.color.lerpColors(new THREE.Color(0xffdcbf), new THREE.Color(0xffffff), dayFactor);
+    } else {
+        sun.intensity = 0;
+        sun.visible = false;
+    }
+
+    // Lamps - only visible at night and when enabled
+    lampLights.forEach((l, index) => {
+        if (lampsEnabled) {
+            // Lamps are only on at night
+            if (isNight) {
+                l.intensity = 1.2;
+                l.visible = true;
+                if (lampHeads[index]) {
+                    lampHeads[index].material.emissiveIntensity = 0.6;
+                }
+            } else {
+                l.intensity = 0;
+                l.visible = false;
+                if (lampHeads[index]) {
+                    lampHeads[index].material.emissiveIntensity = 0.1;
+                }
+            }
+        } else {
+            // Lamps disabled
+            l.intensity = 0;
+            l.visible = false;
+            if (lampHeads[index]) {
+                lampHeads[index].material.emissiveIntensity = 0;
+            }
+        }
+    });
+
+    // Birds
+    if (birdsEnabled) {
+        birds.forEach(b => {
+            if (b && b.position) {
+                b.position.x += 0.02 + Math.random() * 0.01;
+                b.position.z += 0.01 * Math.sin(time * 10 + Math.random());
+                b.position.y = 2 + Math.sin(time * 5 + b.position.x * 0.5 + Math.random());
+                b.rotation.y += 0.01 * (Math.random() - 0.5);
+                if (b.position.x > 15) b.position.x = -15;
+                if (b.position.z > 15) b.position.z = -15;
+            }
+        });
+    }
+
+    // Water
+    if (water && water.material) {
+        water.material.visible = waterEnabled;
+        if (waterEnabled && water.material.map) {
+            water.material.map.offset.y += 0.005;
+        }
+    }
+
+    // Camera movement
     const direction = new THREE.Vector3();
     const right = new THREE.Vector3();
     camera.getWorldDirection(direction);
-    direction.y = 0; direction.normalize();
+    direction.y = 0; 
+    direction.normalize();
     right.crossVectors(camera.up, direction).normalize();
 
-    if(moveForward) camera.position.addScaledVector(direction, speed);
-    if(moveBackward) camera.position.addScaledVector(direction, -speed);
-    if(moveLeft) camera.position.addScaledVector(right, -speed);
-    if(moveRight) camera.position.addScaledVector(right, speed);
+    if (moveForward) camera.position.addScaledVector(direction, speed);
+    if (moveBackward) camera.position.addScaledVector(direction, -speed);
+    if (moveLeft) camera.position.addScaledVector(right, -speed);
+    if (moveRight) camera.position.addScaledVector(right, speed);
 
-    if(camera.position.y < 1.7) camera.position.y = 1.7;
+    // Camera bob
+    if (moveForward || moveBackward || moveLeft || moveRight) {
+        bob += 0.1;
+        camera.position.y = 1.7 + Math.sin(bob) * 0.02;
+    } else {
+        camera.position.y = 1.7;
+    }
 
+    // Door trigger check
+    if (doorOpen && doorTriggerArea) {
+        const cameraPos = camera.position.clone();
+        if (doorTriggerArea.containsPoint(cameraPos)) {
+            enterBuilding();
+        }
+    }
+
+    TWEEN.update();
     renderer.render(scene, camera);
 }
+
+// Start animation
 animate();
 
-// === Window Resize ===
-window.addEventListener('resize', ()=>{
-    camera.aspect = window.innerWidth/window.innerHeight;
+// Resize
+window.addEventListener('resize', () => {
+    camera.aspect = window.innerWidth / window.innerHeight;
     camera.updateProjectionMatrix();
     renderer.setSize(window.innerWidth, window.innerHeight);
 });
+
+window.addEventListener('click', (event) => {
+    // Check if we're trying to lock controls first
+    if (document.pointerLockElement !== document.body) {
+        return;
+    }
+    
+    // Normalize mouse coordinates
+    mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+    mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+
+    raycaster.setFromCamera(mouse, camera);
+
+    const intersects = raycaster.intersectObjects(scene.children, true);
+
+    for (let hit of intersects) {
+        // Check if we clicked the door or door knob
+        if (hit.object.userData && hit.object.userData.isDoor) {
+            console.log('Clicked door directly');
+            toggleDoor();
+            return;
+        }
+        
+        // Check if we clicked the door knob (which is a child of the door)
+        if (hit.object.parent && hit.object.parent.userData && hit.object.parent.userData.isDoor) {
+            console.log('Clicked door knob');
+            toggleDoor();
+            return;
+        }
+
+        if (hit.object.userData && hit.object.userData.isBust) {
+            toggleBustInfo();
+            return;
+        }
+    }
+
+    // Clicked elsewhere → hide panel
+    infoPanel.style.display = 'none';
+});
+
+function toggleBustInfo() {
+    infoPanel.style.display = infoPanel.style.display === 'block' ? 'none' : 'block';
+}
+
+function toggleDoor() {
+    console.log('=== TOGGLE DOOR - SIMPLE TEST ===');
+    console.log('Current doorOpen:', doorOpen);
+    console.log('Current door.rotation.y:', door.rotation.y);
+    
+    doorOpen = !doorOpen;
+    
+    if (doorOpen) {
+        console.log('TEST 1: Setting rotation IMMEDIATELY to Math.PI/2');
+        
+        // TEST 1: Set rotation immediately (no animation)
+        door.rotation.y = Math.PI / 2;
+        console.log('Door rotation set to:', door.rotation.y);
+        
+        // TEST 2: After 2 seconds, try animation
+        setTimeout(() => {
+            console.log('TEST 2: Trying animation now');
+            door.rotation.y = 0; // Reset
+            
+            // Use THREE's built-in animation instead of TWEEN
+            let startTime = Date.now();
+            const duration = 2000; // 2 seconds
+            
+            function animateDoor() {
+                const elapsed = Date.now() - startTime;
+                const progress = Math.min(elapsed / duration, 1);
+                
+                // Ease in-out
+                const easedProgress = progress < 0.5 
+                    ? 2 * progress * progress 
+                    : 1 - Math.pow(-2 * progress + 2, 2) / 2;
+                
+                door.rotation.y = easedProgress * (Math.PI / 2);
+                
+                console.log('Animation progress:', progress, 'Rotation:', door.rotation.y);
+                
+                if (progress < 1) {
+                    requestAnimationFrame(animateDoor);
+                } else {
+                    console.log('Animation complete!');
+                }
+            }
+            
+            animateDoor();
+        }, 2000);
+        
+    } else {
+        console.log('CLOSING DOOR - Setting rotation to 0');
+        door.rotation.y = 0;
+        console.log('Door rotation set to:', door.rotation.y);
+    }
+}
+
+function enterBuilding() {
+    console.log('Entering building');
+    camera.position.set(0, 0, 10); // Move inside the building (further back)
+    scene.background = new THREE.Color(0x1a1a1a);
+    scene.fog.near = 2;
+    scene.fog.far = 10;
+    
+    // Add some interior lighting
+    const interiorLight = new THREE.PointLight(0xffaa66, 0.8, 15);
+    interiorLight.position.set(0, 3, 14);
+    scene.add(interiorLight);
+}

@@ -32,8 +32,9 @@ let birdsEnabled = true;
 let waterEnabled = true;
 let audioEnabled = true;
 
-// Birds array
+// Birds array for GLTF models
 const birds = [];
+const birdSpeed = 0.02;
 
 // Texture loader instance
 const textureLoader = new THREE.TextureLoader();
@@ -152,6 +153,131 @@ createBuilding(14, 14);
 createBuilding(-14, 14);
 createBuilding(-14, -14);
 createBuilding(14, -14);
+
+// === Load Iron Eagle on 10m pole ===
+loader.load('/assets/albanian_eagle_flag/albanianeagle.gltf', (gltf) => {
+    const eagle = gltf.scene;
+    
+    // Create a group for pole and eagle
+    const eagleGroup = new THREE.Group();
+    
+    // Create the 10-meter pole
+    const poleGeometry = new THREE.CylinderGeometry(0.15, 0.25, 10, 8);
+    const poleMaterial = new THREE.MeshStandardMaterial({ 
+        color: 0x888888, 
+        metalness: 0.8, 
+        roughness: 0.3 
+    });
+    const pole = new THREE.Mesh(poleGeometry, poleMaterial);
+    pole.position.y = 5; // Center of pole (half of 10)
+    pole.castShadow = true;
+    pole.receiveShadow = true;
+    eagleGroup.add(pole);
+    
+    // Add the eagle on top
+    eagle.scale.set(0.4, 0.4, 0.1);
+    eagle.position.y = 10; // Place exactly on top of the 10m pole
+    eagle.position.x = 0;
+    eagle.position.z = 0;
+    eagle.rotation.y = Math.PI; // Face forward
+    eagle.castShadow = true;
+    eagle.receiveShadow = true;
+    eagleGroup.add(eagle);
+    
+    // Position the whole thing where you want it (adjust these coordinates)
+    eagleGroup.position.set(10, 0, -12);
+    eagleGroup.rotation.y = Math.PI/1.2; 
+    
+    scene.add(eagleGroup);
+    console.log('✅ Eagle on 10m pole added at', eagleGroup.position);
+}, undefined, (error) => {
+    console.error('Failed to load eagle:', error);
+});
+
+// === Load Chicago Building ===
+const buildingLoader = new GLTFLoader();
+
+// Load texture once
+const buildingTexture = textureLoader.load('/assets/chicago_buildings/textures/Material.001_diffuse.png');
+buildingTexture.flipY = false;
+buildingTexture.colorSpace = THREE.SRGBColorSpace;
+
+function placeBuilding(x, z, rotation) {
+    buildingLoader.load('/assets/chicago_buildings/scene.gltf', (gltf) => {
+        const building = gltf.scene;
+        
+        building.traverse((node) => {
+            if (node.isMesh) {
+                node.material = new THREE.MeshStandardMaterial({ 
+                    map: buildingTexture,
+                    roughness: 0.6,
+                    metalness: 0.05
+                });
+                node.castShadow = true;
+                node.receiveShadow = true;
+            }
+        });
+        
+        building.scale.set(0.2, 0.2, 0.2);
+        building.position.set(x, 1, z);
+        building.rotation.y = rotation; 
+        scene.add(building);
+    });
+}
+
+// Place building on the RIGHT side at (19, 0, 0) facing left
+placeBuilding(19, 0, -Math.PI/2);
+placeBuilding(-19, 0, Math.PI/2);
+placeBuilding(0, -19, 0); 
+
+
+// === Add Asphalt Roads around the square ===
+const asphaltTexture = textureLoader.load('/assets/asphalt_texture.jpg');
+asphaltTexture.wrapS = THREE.RepeatWrapping;
+asphaltTexture.wrapT = THREE.RepeatWrapping;
+asphaltTexture.repeat.set(4, 4);
+
+const asphaltMaterial = new THREE.MeshStandardMaterial({ 
+    map: asphaltTexture,
+    roughness: 0.8,
+    metalness: 0.1
+});
+
+const roadWidth = 4;
+const squareSize = 30;
+const roadY = 0.01;
+
+// Create roads around square
+const positions = [
+    [15 + roadWidth/2, 0, roadWidth, squareSize + roadWidth*2], // East
+    [-15 - roadWidth/2, 0, roadWidth, squareSize + roadWidth*2], // West
+    [0, 15 + roadWidth/2, squareSize + roadWidth*2, roadWidth], // North
+    [0, -15 - roadWidth/2, squareSize + roadWidth*2, roadWidth] // South
+];
+
+positions.forEach(([x, z, w, h]) => {
+    const road = new THREE.Mesh(new THREE.PlaneGeometry(w, h), asphaltMaterial);
+    road.rotation.x = -Math.PI / 2;
+    road.position.set(x, roadY, z);
+    scene.add(road);
+});
+
+// Corners
+const corners = [
+    [15 + roadWidth/2, 15 + roadWidth/2],
+    [15 + roadWidth/2, -15 - roadWidth/2],
+    [-15 - roadWidth/2, 15 + roadWidth/2],
+    [-15 - roadWidth/2, -15 - roadWidth/2]
+];
+
+corners.forEach(([x, z]) => {
+    const corner = new THREE.Mesh(new THREE.PlaneGeometry(roadWidth, roadWidth), asphaltMaterial);
+    corner.rotation.x = -Math.PI / 2;
+    corner.position.set(x, roadY, z);
+    scene.add(corner);
+});
+
+console.log('✅ Square surrounded by asphalt roads');
 
 
 
@@ -351,26 +477,90 @@ parkBridgeRight.position.set(5, 0.1, 0);
 scene.add(parkBridgeRight);
 
 // === Water under bridge ===
+
 const waterTexture = textureLoader.load('/assets/water_texture.jpg');
 waterTexture.wrapS = waterTexture.wrapT = THREE.RepeatWrapping;
-waterTexture.repeat.set(4, 2);
-const water = new THREE.Mesh(new THREE.PlaneGeometry(12, 5), new THREE.MeshStandardMaterial({ map: waterTexture, transparent: true, opacity: 0.7 }));
+waterTexture.repeat.set(4, 4);
+const water = new THREE.Mesh(new THREE.PlaneGeometry(38, 5), new THREE.MeshStandardMaterial({ map: waterTexture, transparent: true, opacity: 0.7 }));
 water.rotation.x = -Math.PI / 2;
-water.position.set(0, 0.05, 5);
+water.position.set(0, 0.05, 21.5);
 scene.add(water);
 
-// === Birds ===
-function createBird() {
-    const bird = new THREE.Mesh(
-        new THREE.ConeGeometry(0.2, 0.5, 3),
-        new THREE.MeshStandardMaterial({ color: 0x000000 })
-    );
-    bird.rotation.x = Math.PI / 2;
-    bird.position.set(Math.random() * 20 - 10, Math.random() * 5 + 2, Math.random() * 20 - 10);
-    scene.add(bird);
-    birds.push(bird);
+const water2 = new THREE.Mesh(new THREE.PlaneGeometry(10, 5), new THREE.MeshStandardMaterial({ map: waterTexture, transparent: true, opacity: 0.7 }));
+water2.rotation.y=-Math.PI/2.5;
+water2.rotation.x=-Math.PI/2;
+water2.rotation.z;
+water2.position.set(20.5, 4.8, 21.5);
+scene.add(water2);
+
+
+// wall
+const waterwallGeometry=new THREE.BoxGeometry(38, 2, 1)
+const waterwallTexture = textureLoader.load('/assets/buildingtexture.jpg');
+waterwallTexture.wrapS = waterwallTexture.wrapT = THREE.RepeatWrapping;
+waterwallTexture.repeat.set(9, 1);
+const waterwallMaterial= new THREE.MeshStandardMaterial({ map: waterwallTexture });
+const waterwall=new THREE.Mesh(waterwallGeometry, waterwallMaterial);
+waterwall.position.set(0, 1, 24.5);
+scene.add(waterwall)
+
+
+
+// === Load Bird GLTF Models ===
+function loadBirds() {
+    const birdLoader = new GLTFLoader();
+    
+    // Load multiple birds with random positions
+    for (let i = 0; i < 5; i++) {
+        birdLoader.load('/assets/bird.gltf', (gltf) => {
+            const bird = gltf.scene;
+            
+            // Scale the bird appropriately
+            bird.scale.set(0.5, 0.5, 0.5);
+            
+            // Random starting position within the park area
+            bird.position.set(
+                Math.random() * 20 - 10,  // x: -10 to 10
+                Math.random() * 4 + 8,     // y: 2 to 5
+                Math.random() * 20 - 10    // z: -10 to 10
+            );
+            
+            // Random initial rotation
+            bird.rotation.y = Math.random() * Math.PI * 2;
+            
+            // Store individual bird data for animation
+            bird.userData = {
+                speed: 0.02 + Math.random() * 0.02,
+                direction: new THREE.Vector3(
+                    (Math.random() - 0.5) * 2,
+                    0,
+                    (Math.random() - 0.5) * 2
+                ).normalize(),
+                wingAngle: 0,
+                flightPathOffset: Math.random() * Math.PI * 2,
+                originalY: bird.position.y
+            };
+            
+            // Enable shadows for all meshes in the bird
+            bird.traverse((node) => {
+                if (node.isMesh) {
+                    node.castShadow = true;
+                    node.receiveShadow = true;
+                }
+            });
+            
+            scene.add(bird);
+            birds.push(bird);
+            
+            console.log(`Bird ${i + 1} loaded successfully`);
+        }, undefined, (error) => {
+            console.error('Error loading bird GLTF:', error);
+        });
+    }
 }
-for (let i = 0; i < 7; i++) createBird();
+
+// Load the birds
+loadBirds();
 
 // === Controls Panel ===
 const controlPanel = document.createElement('div');
@@ -403,10 +593,13 @@ document.getElementById('fogToggle').addEventListener('change', e => fogEnabled 
 document.getElementById('birdsToggle').addEventListener('change', e => {
     birdsEnabled = e.target.checked;
     if (!birdsEnabled) {
-        birds.forEach(bird => scene.remove(bird));
-        birds.length = 0;
+        birds.forEach(bird => {
+            bird.visible = false;
+        });
     } else {
-        for (let i = 0; i < 7; i++) createBird();
+        birds.forEach(bird => {
+            bird.visible = true;
+        });
     }
 });
 document.getElementById('waterToggle').addEventListener('change', e => waterEnabled = e.target.checked);
@@ -520,16 +713,48 @@ function animate() {
         }
     });
 
-    // Birds
+    // Birds animation with GLTF models
     if (birdsEnabled) {
-        birds.forEach(b => {
-            if (b && b.position) {
-                b.position.x += 0.02 + Math.random() * 0.01;
-                b.position.z += 0.01 * Math.sin(time * 10 + Math.random());
-                b.position.y = 2 + Math.sin(time * 5 + b.position.x * 0.5 + Math.random());
-                b.rotation.y += 0.01 * (Math.random() - 0.5);
-                if (b.position.x > 15) b.position.x = -15;
-                if (b.position.z > 15) b.position.z = -15;
+        birds.forEach(bird => {
+            if (bird && bird.position) {
+                const data = bird.userData;
+                
+                // Move bird in its direction
+                bird.position.x += data.direction.x * data.speed;
+                bird.position.z += data.direction.z * data.speed;
+                
+                // Add slight up and down motion (floating)
+                bird.position.y = data.originalY + Math.sin(time * 5 + data.flightPathOffset) * 0.3;
+                
+                // Rotate bird to face direction of movement
+                if (data.direction.length() > 0) {
+                    const angle = Math.atan2(data.direction.x, data.direction.z);
+                    bird.rotation.y = angle;
+                }
+                
+                // Add wing flapping animation if the bird has bones or we want to rotate parts
+                // For simple animation, we'll just bob the bird slightly
+                bird.rotation.x = Math.sin(time * 10 + data.flightPathOffset) * 0.1;
+                bird.rotation.z = Math.cos(time * 8 + data.flightPathOffset) * 0.05;
+                
+                // Boundary checking - reverse direction if hitting boundaries
+                if (bird.position.x > 15 || bird.position.x < -15) {
+                    data.direction.x *= -1;
+                    data.originalY = bird.position.y; // Update reference height
+                }
+                if (bird.position.z > 15 || bird.position.z < -15) {
+                    data.direction.z *= -1;
+                    data.originalY = bird.position.y; // Update reference height
+                }
+                
+                // Occasionally change direction randomly
+                if (Math.random() < 0.005) {
+                    data.direction.set(
+                        (Math.random() - 0.5) * 2,
+                        0,
+                        (Math.random() - 0.5) * 2
+                    ).normalize();
+                }
             }
         });
     }
@@ -537,8 +762,9 @@ function animate() {
     // Water
     if (water && water.material) {
         water.material.visible = waterEnabled;
+        water2.material.visible=waterEnabled;
         if (waterEnabled && water.material.map) {
-            water.material.map.offset.y += 0.005;
+            water.material.map.offset.x += 0.005;
         }
     }
 
@@ -563,15 +789,7 @@ function animate() {
         camera.position.y = 1.7;
     }
 
-    // Door trigger check
-    if (doorOpen && doorTriggerArea) {
-        const cameraPos = camera.position.clone();
-        if (doorTriggerArea.containsPoint(cameraPos)) {
-            enterBuilding();
-        }
-    }
-
-    TWEEN.update();
+    
     renderer.render(scene, camera);
 }
 
@@ -629,67 +847,23 @@ function toggleBustInfo() {
 }
 
 function toggleDoor() {
-    console.log('=== TOGGLE DOOR - SIMPLE TEST ===');
-    console.log('Current doorOpen:', doorOpen);
-    console.log('Current door.rotation.y:', door.rotation.y);
     
     doorOpen = !doorOpen;
     
     if (doorOpen) {
-        console.log('TEST 1: Setting rotation IMMEDIATELY to Math.PI/2');
         
-        // TEST 1: Set rotation immediately (no animation)
         door.rotation.y = Math.PI / 2;
-        console.log('Door rotation set to:', door.rotation.y);
+        door.position.x=-1.2;
         
-        // TEST 2: After 2 seconds, try animation
-        setTimeout(() => {
-            console.log('TEST 2: Trying animation now');
-            door.rotation.y = 0; // Reset
+        
+     
             
-            // Use THREE's built-in animation instead of TWEEN
-            let startTime = Date.now();
-            const duration = 2000; // 2 seconds
-            
-            function animateDoor() {
-                const elapsed = Date.now() - startTime;
-                const progress = Math.min(elapsed / duration, 1);
-                
-                // Ease in-out
-                const easedProgress = progress < 0.5 
-                    ? 2 * progress * progress 
-                    : 1 - Math.pow(-2 * progress + 2, 2) / 2;
-                
-                door.rotation.y = easedProgress * (Math.PI / 2);
-                
-                console.log('Animation progress:', progress, 'Rotation:', door.rotation.y);
-                
-                if (progress < 1) {
-                    requestAnimationFrame(animateDoor);
-                } else {
-                    console.log('Animation complete!');
-                }
-            }
-            
-            animateDoor();
-        }, 2000);
+           
         
     } else {
         console.log('CLOSING DOOR - Setting rotation to 0');
         door.rotation.y = 0;
+        door.position.x+=1.2
         console.log('Door rotation set to:', door.rotation.y);
     }
-}
-
-function enterBuilding() {
-    console.log('Entering building');
-    camera.position.set(0, 0, 10); // Move inside the building (further back)
-    scene.background = new THREE.Color(0x1a1a1a);
-    scene.fog.near = 2;
-    scene.fog.far = 10;
-    
-    // Add some interior lighting
-    const interiorLight = new THREE.PointLight(0xffaa66, 0.8, 15);
-    interiorLight.position.set(0, 3, 14);
-    scene.add(interiorLight);
 }

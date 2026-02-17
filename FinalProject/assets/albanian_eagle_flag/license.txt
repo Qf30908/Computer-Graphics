@@ -1,0 +1,11 @@
+Model Information:
+* title:	Albanian eagle (flag)
+* source:	https://sketchfab.com/3d-models/albanian-eagle-flag-27f33e9bd8cd4ab5b482bc699b73d019
+* author:	NG02 (https://sketchfab.com/NG02)
+
+Model License:
+* license type:	CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)
+* requirements:	Author must be credited. Commercial use is allowed.
+
+If you use this 3D model in your project be sure to copy paste this credit wherever you share it:
+This work is based on "Albanian eagle (flag)" (https://sketchfab.com/3d-models/albanian-eagle-flag-27f33e9bd8cd4ab5b482bc699b73d019) by NG02 (https://sketchfab.com/NG02) licensed under CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)

@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { PointerLockControls } from 'three/examples/jsm/controls/PointerLockControls.js';
-import TWEEN from '@tweenjs/tween.js';
+
 
 // === Global variables ===
 let scene, camera, renderer, controls, hero;
@@ -32,6 +32,9 @@ let birdsEnabled = true;
 let waterEnabled = true;
 let audioEnabled = true;
 
+let fenceEnabled= true;
+let fences = [];  // store all fences
+
 // Birds array for GLTF models
 const birds = [];
 const birdSpeed = 0.02;
@@ -46,7 +49,7 @@ scene.fog = new THREE.Fog(0x87ceeb, 10, 50);
 
 // === Camera ===
 camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 100);
-camera.position.set(0, 1.7, 5);
+camera.position.set(0, 1.7, 20);
 
 // === Renderer ===
 renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -153,6 +156,58 @@ createBuilding(14, 14);
 createBuilding(-14, 14);
 createBuilding(-14, -14);
 createBuilding(14, -14);
+loader.load('/assets/classical_fence/classical_fence.gltf', (gltf) => {
+    const fence = gltf.scene;
+
+    // Original fence size and position
+    fence.scale.set(0.5, 0.3, 0.5);
+    fence.position.set(4.5, 0, -6);
+
+    fence.traverse(child => {
+        if (child.isMesh) {
+            child.castShadow = true;
+            child.receiveShadow = true;
+            child.material.needsUpdate = true;
+        }
+    });
+
+    scene.add(fence);
+    fences.push(fence); // store the first fence
+
+    // Additional fences
+    const positions = [
+        { x: 3, y: 0, z: 6, rotationY: 0 },
+        { x: 4.65, y: 0, z: 6, rotationY: 0 },
+        { x: -3, y: 0, z: 6, rotationY: 0 },
+        { x: -4.65, y: 0, z: 6, rotationY: 0 },
+        { x: 1, y: 0, z: -6, rotationY: Math.PI },
+        { x: -2.5, y: 0, z: -6, rotationY: Math.PI },
+        { x: -4.68, y: 0, z: -6, rotationY: Math.PI },
+        { x: 6, y: 0, z: -4.5, rotationY: Math.PI/2 },
+        { x: 6, y: 0, z: -1, rotationY: Math.PI/2 },
+        { x: 6, y: 0, z: 2.5, rotationY: Math.PI/2 },
+        { x: 6, y: 0, z: 4.17, rotationY: Math.PI/2 },
+        { x: -6, y: 0, z: -4.5, rotationY: Math.PI/2 },
+        { x: -6, y: 0, z: -1, rotationY: Math.PI/2 },
+        { x: -6, y: 0, z: 2.5, rotationY: Math.PI/2 },
+        { x: -6, y: 0, z: 4.17, rotationY: Math.PI/2 },
+        // bridge
+        { x: -2.5, y:-0.3, z:23.40, rotationY: Math.PI/2},
+        { x: -2.5, y:-0.3, z:20.64, rotationY: Math.PI/2},
+        { x: 2.5, y:-0.3, z:23.40, rotationY: Math.PI/2},
+        { x: 2.5, y:-0.3, z:20.64, rotationY: Math.PI/2}
+    ];
+
+    positions.forEach(pos => {
+        const clone = fence.clone();
+        clone.position.set(pos.x, pos.y, pos.z);
+        clone.rotation.y = pos.rotationY;
+        scene.add(clone);
+        fences.push(clone); // store clone for toggling
+    });
+});
+
+
 
 // === Load Iron Eagle on 10m pole ===
 loader.load('/assets/albanian_eagle_flag/albanianeagle.gltf', (gltf) => {
@@ -175,7 +230,7 @@ loader.load('/assets/albanian_eagle_flag/albanianeagle.gltf', (gltf) => {
     eagleGroup.add(pole);
     
     // Add the eagle on top
-    eagle.scale.set(0.4, 0.4, 0.1);
+    eagle.scale.set(0.4, 0.4, 0.05);
     eagle.position.y = 10; // Place exactly on top of the 10m pole
     eagle.position.x = 0;
     eagle.position.z = 0;
@@ -189,7 +244,6 @@ loader.load('/assets/albanian_eagle_flag/albanianeagle.gltf', (gltf) => {
     eagleGroup.rotation.y = Math.PI/1.2; 
     
     scene.add(eagleGroup);
-    console.log('✅ Eagle on 10m pole added at', eagleGroup.position);
 }, undefined, (error) => {
     console.error('Failed to load eagle:', error);
 });
@@ -481,28 +535,91 @@ scene.add(parkBridgeRight);
 const waterTexture = textureLoader.load('/assets/water_texture.jpg');
 waterTexture.wrapS = waterTexture.wrapT = THREE.RepeatWrapping;
 waterTexture.repeat.set(4, 4);
-const water = new THREE.Mesh(new THREE.PlaneGeometry(38, 5), new THREE.MeshStandardMaterial({ map: waterTexture, transparent: true, opacity: 0.7 }));
+const water = new THREE.Mesh(new THREE.PlaneGeometry(70, 5), new THREE.MeshStandardMaterial({ map: waterTexture, transparent: true, opacity: 0.7, side: THREE.DoubleSide }));
 water.rotation.x = -Math.PI / 2;
-water.position.set(0, 0.05, 21.5);
+water.position.set(0, -1, 21.5);
 scene.add(water);
 
-const water2 = new THREE.Mesh(new THREE.PlaneGeometry(10, 5), new THREE.MeshStandardMaterial({ map: waterTexture, transparent: true, opacity: 0.7 }));
-water2.rotation.y=-Math.PI/2.5;
-water2.rotation.x=-Math.PI/2;
-water2.rotation.z;
-water2.position.set(20.5, 4.8, 21.5);
-scene.add(water2);
+// const water2 = new THREE.Mesh(new THREE.PlaneGeometry(10, 5), new THREE.MeshStandardMaterial({ map: waterTexture, transparent: true, opacity: 0.7,  side: THREE.DoubleSide  }));
+// water2.rotation.y=-Math.PI/2.5;
+// water2.rotation.x=-Math.PI/2;
+// water2.rotation.z;
+// water2.position.set(20.5, 3.7, 21.5);
+// scene.add(water2);
+
 
 
 // wall
-const waterwallGeometry=new THREE.BoxGeometry(38, 2, 1)
+const waterwallGeometry=new THREE.BoxGeometry(70, 2, 1)
 const waterwallTexture = textureLoader.load('/assets/buildingtexture.jpg');
 waterwallTexture.wrapS = waterwallTexture.wrapT = THREE.RepeatWrapping;
-waterwallTexture.repeat.set(9, 1);
+waterwallTexture.repeat.set(50, 1);
 const waterwallMaterial= new THREE.MeshStandardMaterial({ map: waterwallTexture });
 const waterwall=new THREE.Mesh(waterwallGeometry, waterwallMaterial);
-waterwall.position.set(0, 1, 24.5);
+waterwall.position.set(0, -1, 24.5);
 scene.add(waterwall)
+
+// new wall (shifted -5 on Z axis)
+const waterwall2 = new THREE.Mesh(waterwallGeometry, waterwallMaterial);
+waterwall2.position.set(0, -1, 24.5 - 5.1); // Z moved back by 5
+scene.add(waterwall2);
+
+
+const rivergroundTexture = textureLoader.load('/assets/buildingtexture.jpg');
+rivergroundTexture.wrapS = rivergroundTexture.wrapT = THREE.RepeatWrapping;
+rivergroundTexture.repeat.set(50, 4);
+
+const riverGround = new THREE.Mesh(
+  new THREE.PlaneGeometry(70, 5),
+  new THREE.MeshStandardMaterial({
+    map: rivergroundTexture,
+    side: THREE.DoubleSide
+  })
+);
+
+riverGround.rotation.x = -Math.PI / 2; 
+riverGround.position.set(0, -1, 21.5);
+scene.add(riverGround);
+
+// const parkTexture = textureLoader.load('/assets/park_texture.jpg');
+// parkTexture.wrapS = parkTexture.wrapT = THREE.RepeatWrapping;
+// parkTexture.repeat.set(25,25);
+
+// const parkGround = new THREE.Mesh(
+//   new THREE.PlaneGeometry(38, 30),
+//   new THREE.MeshStandardMaterial({
+//     map: parkTexture,
+//     side: THREE.DoubleSide
+//   })
+// );
+
+// parkGround.rotation.x = -Math.PI / 2; // FIX
+// parkGround.position.set(0, -0.5, 40);
+// scene.add(parkGround);
+
+loader.load('assets/park_caffe/scene.gltf', function (gltf) {
+    const parkmodel = gltf.scene;
+
+    parkmodel.position.set(0, -1.1, 60);
+
+    parkmodel.scale.set(2, 2, 2); 
+
+    parkmodel.rotation.y=-Math.PI/1.35;
+    scene.add(parkmodel);
+});
+
+
+// wall
+const bridgeGeometry=new THREE.BoxGeometry(5, 4.1, 0.5)
+const bridgeTexture = textureLoader.load('/assets/buildingtexture.jpg');
+bridgeTexture.wrapS = bridgeTexture.wrapT = THREE.RepeatWrapping;
+bridgeTexture.repeat.set(3.9,4);
+const bridgeMaterial= new THREE.MeshStandardMaterial({ map: bridgeTexture });
+const bridge=new THREE.Mesh(bridgeGeometry, bridgeMaterial);
+bridge.position.set(0, -0.25, 21.95);
+bridge.rotation.x=Math.PI/2;
+scene.add(bridge);
+
 
 
 
@@ -579,12 +696,16 @@ W/A/S/D: Move<br>
 L: Toggle Lamps<br>
 P: Toggle Sun<br>
 Time: <input type="range" id="timeSlider" min="0" max="1" step="0.001" value="0"><br>
+Camera Y position: <input type="range" id="cameraSlider" min="1" max="50" step="0.001" value="1"> Drone view<br>
+
 <br>
 <b>Extras:</b><br>
 <input type="checkbox" id="fogToggle" checked> Fog<br>
 <input type="checkbox" id="birdsToggle" checked> Birds<br>
 <input type="checkbox" id="waterToggle" checked> Water<br>
 <input type="checkbox" id="audioToggle" checked> Ambient Audio<br>
+<input type="checkbox" id="fenceToggle" checked> Fence Visibility<br>
+
 `;
 document.body.appendChild(controlPanel);
 
@@ -616,6 +737,11 @@ audioToggle.addEventListener('change', e => {
         }
     }
 });
+// Toggle fence visibility
+document.getElementById('fenceToggle').addEventListener('change', e => {
+    fenceEnabled = e.target.checked;
+    fences.forEach(f => f.visible = fenceEnabled);
+});
 
 // Time slider
 const timeSlider = document.getElementById('timeSlider');
@@ -636,6 +762,15 @@ timeModeButton.addEventListener('click', () => {
     autoTime = !autoTime;
     timeModeButton.innerText = autoTime ? 'Time Mode: Auto' : 'Time Mode: Manual';
 });
+
+
+// Time slider
+let cameraY = camera.position.y;
+
+cameraSlider.addEventListener('input', (e) => {
+    cameraY = parseFloat(e.target.value);
+});
+
 
 // === Audio ===
 let sound;
@@ -665,22 +800,22 @@ function animate() {
         if (time > 1) time = 0; 
         timeSlider.value = time; 
     }
-    const dayFactor = Math.sin(time * Math.PI * 2) * 0.5 + 0.5;
-    const isDay = dayFactor > 0.5;
-    const isNight = dayFactor <= 0.5;
+    const dayFactor = Math.sin(time * Math.PI * 2) * 0.5 + 0.5; // sinusoid [-1, 1], * 0.5 + 0.5 = [0,1]
+    const isDay = dayFactor > 0.5;  // determines when is day
+    const isNight = dayFactor <= 0.5; // when is night
 
     // Background & fog
-    scene.background.lerpColors(new THREE.Color(0x87ceeb), new THREE.Color(0x0a0a2a), 1 - dayFactor);
-    scene.fog.color.lerpColors(new THREE.Color(0x87ceeb), new THREE.Color(0x0a0a2a), 1 - dayFactor);
+    scene.background.lerpColors(new THREE.Color(0x87ceeb), new THREE.Color(0x0a0a2a), 1 - dayFactor);  // day sky color and night sky
+    scene.fog.color.lerpColors(new THREE.Color(0x87ceeb), new THREE.Color(0x0a0a2a), 1 - dayFactor); // Fog color is synchronized with the sky for realism
     scene.fog.near = fogEnabled ? 10 : 1000;
     scene.fog.far = fogEnabled ? 50 : 1000;
 
     // Sun - only visible during day and when enabled
     if (sunEnabled) {
-        sun.intensity = Math.max(0, 0.2 + 0.8 * dayFactor - 0.5);
+        sun.intensity = Math.max(0, 0.2 + 0.8 * dayFactor - 0.5);         // Sun intensity smoothly changes based on dayFactor
         sun.visible = isDay;
         sun.castShadow = isDay;
-        sun.color.lerpColors(new THREE.Color(0xffdcbf), new THREE.Color(0xffffff), dayFactor);
+        sun.color.lerpColors(new THREE.Color(0xffdcbf), new THREE.Color(0xffffff), dayFactor); //Sun color transitions from warm (sunrise/sunset) to white (midday)
     } else {
         sun.intensity = 0;
         sun.visible = false;
@@ -732,10 +867,9 @@ function animate() {
                     bird.rotation.y = angle;
                 }
                 
-                // Add wing flapping animation if the bird has bones or we want to rotate parts
-                // For simple animation, we'll just bob the bird slightly
-                bird.rotation.x = Math.sin(time * 10 + data.flightPathOffset) * 0.1;
-                bird.rotation.z = Math.cos(time * 8 + data.flightPathOffset) * 0.05;
+                
+                bird.rotation.x = Math.sin(time * 10 + data.flightPathOffset) * 0.1; // pitch
+                bird.rotation.z = Math.cos(time * 8 + data.flightPathOffset) * 0.05; // roll
                 
                 // Boundary checking - reverse direction if hitting boundaries
                 if (bird.position.x > 15 || bird.position.x < -15) {
@@ -762,7 +896,7 @@ function animate() {
     // Water
     if (water && water.material) {
         water.material.visible = waterEnabled;
-        water2.material.visible=waterEnabled;
+        // water2.material.visible=waterEnabled;
         if (waterEnabled && water.material.map) {
             water.material.map.offset.x += 0.005;
         }
@@ -788,6 +922,8 @@ function animate() {
     } else {
         camera.position.y = 1.7;
     }
+
+    camera.position.y = cameraY;
 
     
     renderer.render(scene, camera);
@@ -853,7 +989,8 @@ function toggleDoor() {
     if (doorOpen) {
         
         door.rotation.y = Math.PI / 2;
-        door.position.x=-1.2;
+        door.position.x=-1.4;
+        door.position.z=13.5;
         
         
      
@@ -863,7 +1000,8 @@ function toggleDoor() {
     } else {
         console.log('CLOSING DOOR - Setting rotation to 0');
         door.rotation.y = 0;
-        door.position.x+=1.2
+        door.position.x+=1.4;
+        door.position.z=15;
         console.log('Door rotation set to:', door.rotation.y);
     }
 }

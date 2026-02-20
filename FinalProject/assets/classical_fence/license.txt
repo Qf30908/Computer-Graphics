@@ -1,0 +1,11 @@
+Model Information:
+* title:	Classical Fence
+* source:	https://sketchfab.com/3d-models/classical-fence-6e320a57c8814414babaab751db24517
+* author:	Dandushik (https://sketchfab.com/Dandushik)
+
+Model License:
+* license type:	CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)
+* requirements:	Author must be credited. Commercial use is allowed.
+
+If you use this 3D model in your project be sure to copy paste this credit wherever you share it:
+This work is based on "Classical Fence" (https://sketchfab.com/3d-models/classical-fence-6e320a57c8814414babaab751db24517) by Dandushik (https://sketchfab.com/Dandushik) licensed under CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)

@@ -1,0 +1,11 @@
+Model Information:
+* title:	In Park Cafe Installation
+* source:	https://sketchfab.com/3d-models/in-park-cafe-installation-c0a323383f3c4273bbf366a04053cc74
+* author:	AbdulrhanAshraf (https://sketchfab.com/AbdulrhanAshraf)
+
+Model License:
+* license type:	CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)
+* requirements:	Author must be credited. Commercial use is allowed.
+
+If you use this 3D model in your project be sure to copy paste this credit wherever you share it:
+This work is based on "In Park Cafe Installation" (https://sketchfab.com/3d-models/in-park-cafe-installation-c0a323383f3c4273bbf366a04053cc74) by AbdulrhanAshraf (https://sketchfab.com/AbdulrhanAshraf) licensed under CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)
